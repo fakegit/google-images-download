@@ -166,35 +166,69 @@ class googleimagesdownload:
     def download_extended_page(self,url,chromedriver):
         from selenium import webdriver
         from selenium.webdriver.common.keys import Keys
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
+
         if sys.version_info[0] < 3:
             reload(sys)
             sys.setdefaultencoding('utf8')
-        options = webdriver.ChromeOptions()
+
+        options = Options()
         options.add_argument('--no-sandbox')
-        options.add_argument("--headless")
+        options.add_argument('--headless=new')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        options.add_experimental_option('useAutomationExtension', False)
+        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
         try:
-            browser = webdriver.Chrome(chromedriver, chrome_options=options)
+            if chromedriver:
+                service = Service(chromedriver)
+                browser = webdriver.Chrome(service=service, options=options)
+            else:
+                # Try to use webdriver-manager if no chromedriver specified
+                try:
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    service = Service(ChromeDriverManager().install())
+                    browser = webdriver.Chrome(service=service, options=options)
+                except:
+                    # Fallback to default
+                    browser = webdriver.Chrome(options=options)
         except Exception as e:
             print("Looks like we cannot locate the path the 'chromedriver' (use the '--chromedriver' "
                   "argument to specify the path to the executable.) or google chrome browser is not "
                   "installed on your machine (exception: %s)" % e)
             sys.exit()
+
+        # Anti-detection: override navigator.webdriver
+        browser.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': '''
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                })
+            '''
+        })
+
         browser.set_window_size(1024, 768)
 
         # Open the link
         browser.get(url)
-        time.sleep(1)
+        time.sleep(3)
         print("Getting you a lot of images. This may take a few moments...")
 
-        element = browser.find_element_by_tag_name("body")
+        element = browser.find_element(By.TAG_NAME, "body")
         # Scroll down
         for i in range(30):
             element.send_keys(Keys.PAGE_DOWN)
             time.sleep(0.3)
 
         try:
-            browser.find_element_by_id("smb").click()
+            # Try to click "Show more results" button
+            show_more_button = browser.find_element(By.CSS_SELECTOR, "input[value='Show more results']")
+            show_more_button.click()
+            time.sleep(2)
             for i in range(50):
                 element.send_keys(Keys.PAGE_DOWN)
                 time.sleep(0.3)  # bot id protection
@@ -208,7 +242,7 @@ class googleimagesdownload:
 
         source = browser.page_source #page source
         #close the browser
-        browser.close()
+        browser.quit()
 
         return source
 
@@ -710,33 +744,76 @@ class googleimagesdownload:
         return download_status,download_message,return_image_name,absolute_path
 
 
-    # Finding 'Next Image' from the given raw page
+    # Finding 'Next Image' from the given raw page (Updated for new Google Images)
     def _get_next_item(self,s):
-        start_line = s.find('rg_meta notranslate')
-        if start_line == -1:  # If no links are found then give an error!
-            end_quote = 0
-            link = "no_links"
-            return link, end_quote
-        else:
-            start_line = s.find('class="rg_meta notranslate">')
-            start_object = s.find('{', start_line + 1)
-            end_object = s.find('</div>', start_object + 1)
-            object_raw = str(s[start_object:end_object])
-            #remove escape characters based on python version
-            version = (3, 0)
-            cur_version = sys.version_info
-            if cur_version >= version: #python3
+        # Try new Google Images format first (JSON in scripts)
+        # Look for image URLs in the modern format
+        patterns = [
+            # Pattern 1: Direct URLs in quotes
+            r'\["(https://[^"]+\.(?:jpg|jpeg|png|webp|gif)[^"]*?)"',
+            # Pattern 2: Inside data structures
+            r'"ou":"(https://[^"]+\.(?:jpg|jpeg|png|webp|gif)[^"]*?)"',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, s)
+            if match:
+                image_url = match.group(1)
+                # Build a simple object structure
+                final_object = {
+                    'ou': image_url,  # original URL
+                    'ity': '',  # format will be extracted from URL
+                    'oh': '',   # height
+                    'ow': '',   # width
+                    'pt': '',   # title
+                    'rh': '',   # host
+                    'ru': '',   # referrer URL
+                    'tu': ''    # thumbnail URL
+                }
+
+                # Try to extract more metadata if available around this match
+                context_start = max(0, match.start() - 1000)
+                context_end = min(len(s), match.end() + 1000)
+                context = s[context_start:context_end]
+
+                # Try to find associated metadata
                 try:
-                    object_decode = bytes(object_raw, "utf-8").decode("unicode_escape")
-                    final_object = json.loads(object_decode)
+                    # Look for dimensions
+                    dims_match = re.search(r'"ow":(\d+),"oh":(\d+)', context)
+                    if dims_match:
+                        final_object['ow'] = dims_match.group(1)
+                        final_object['oh'] = dims_match.group(2)
+
+                    # Look for thumbnail
+                    thumb_match = re.search(r'"tu":"(https://[^"]+)"', context)
+                    if thumb_match:
+                        final_object['tu'] = thumb_match.group(1)
+
+                    # Look for title/description
+                    title_match = re.search(r'"pt":"([^"]+)"', context)
+                    if title_match:
+                        final_object['pt'] = title_match.group(1)
+
+                    # Look for source
+                    source_match = re.search(r'"ru":"(https://[^"]+)"', context)
+                    if source_match:
+                        final_object['ru'] = source_match.group(1)
+                        # Extract host from source URL
+                        host_match = re.search(r'https?://([^/]+)', final_object['ru'])
+                        if host_match:
+                            final_object['rh'] = host_match.group(1)
+
+                    # Extract format from URL
+                    format_match = re.search(r'\.([a-z]+)(?:\?|$)', image_url)
+                    if format_match:
+                        final_object['ity'] = format_match.group(1)
                 except:
-                    final_object = ""
-            else:  #python2
-                try:
-                    final_object = (json.loads(self.repair(object_raw)))
-                except:
-                    final_object = ""
-            return final_object, end_object
+                    pass
+
+                return final_object, match.end()
+
+        # If no matches found with new patterns, return no links
+        return "no_links", 0
 
 
     # Getting all links with the help of '_images_get_next_image'
@@ -746,6 +823,8 @@ class googleimagesdownload:
         errorCount = 0
         i = 0
         count = 1
+        seen_urls = set()  # Track URLs to avoid duplicates
+
         while count < limit+1:
             object, end_content = self._get_next_item(page)
             if object == "no_links":
@@ -758,6 +837,14 @@ class googleimagesdownload:
             else:
                 #format the item for readability
                 object = self.format_object(object)
+
+                # Skip duplicate URLs
+                image_url = object.get('image_link', '')
+                if image_url in seen_urls:
+                    page = page[end_content:]
+                    continue
+                seen_urls.add(image_url)
+
                 if arguments['metadata']:
                     if not arguments["silent_mode"]:
                         print("\nImage Metadata: " + str(object))
@@ -939,10 +1026,8 @@ class googleimagesdownload:
 
                     url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'])      #building main search url
 
-                    if limit < 101:
-                        raw_html = self.download_page(url)  # download page
-                    else:
-                        raw_html = self.download_extended_page(url,arguments['chromedriver'])
+                    # Google Images now requires JavaScript, always use Selenium
+                    raw_html = self.download_extended_page(url,arguments['chromedriver'])
 
                     if not arguments["silent_mode"]:
                         if arguments['no_download']:
@@ -970,10 +1055,8 @@ class googleimagesdownload:
                         for key, value in tabs.items():
                             final_search_term = (search_term + " - " + key)
                             print("\nNow Downloading - " + final_search_term)
-                            if limit < 101:
-                                new_raw_html = self.download_page(value)  # download page
-                            else:
-                                new_raw_html = self.download_extended_page(value,arguments['chromedriver'])
+                            # Always use Selenium for modern Google Images
+                            new_raw_html = self.download_extended_page(value,arguments['chromedriver'])
                             self.create_directories(main_directory, final_search_term,arguments['thumbnail'],arguments['thumbnail_only'])
                             self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
 
