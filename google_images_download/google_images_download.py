@@ -139,42 +139,7 @@ class googleimagesdownload:
         filename = filename.strip('. ')
         return filename
 
-    # Downloading entire Web Document (Raw Page Content)
-    def download_page(self,url):
-        version = (3, 0)
-        cur_version = sys.version_info
-        if cur_version >= version:  # If the Current Version of Python is 3.0 or above
-            try:
-                headers = {}
-                headers['User-Agent'] = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
-                req = urllib.request.Request(url, headers=headers)
-                resp = urllib.request.urlopen(req)
-                respData = str(resp.read())
-                return respData
-            except Exception as e:
-                print("Could not open URL. Please check your internet connection and/or ssl settings \n"
-                      "If you are using proxy, make sure your proxy settings is configured correctly")
-                sys.exit()
-        else:  # If the Current Version of Python is 2.x
-            try:
-                headers = {}
-                headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-                req = urllib2.Request(url, headers=headers)
-                try:
-                    response = urllib2.urlopen(req)
-                except URLError:  # Handling SSL certificate failed
-                    context = ssl._create_unverified_context()
-                    response = urlopen(req, context=context)
-                page = response.read()
-                return page
-            except:
-                print("Could not open URL. Please check your internet connection and/or ssl settings \n"
-                      "If you are using proxy, make sure your proxy settings is configured correctly")
-                sys.exit()
-                return "Page Not found"
-
-
-    # Download Page for more than 100 images
+    # Download Page using Selenium (required for modern Google Images)
     def download_extended_page(self,url,chromedriver):
         from selenium import webdriver
         from selenium.webdriver.common.keys import Keys

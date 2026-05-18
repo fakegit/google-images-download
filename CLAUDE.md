@@ -48,9 +48,8 @@
 
 ### Closing Issues - Tone Guidelines
 - Keep brief and human
-- Thank user first if genuine issue: "Thanks for reporting!"
-- For fixed issues: Always reply in natural human tone explaining the issue is resolved and briefly describe what we did to fix it
-  - Example: "Thanks for reporting! This is now fixed. The similar_images feature now properly includes filter parameters like size and format in the search URL."
+- For fixed issues: Reply in natural human tone explaining the issue is resolved and briefly describe what we did to fix it
+  - Example: "This is now fixed. The similar_images feature now properly includes filter parameters like size and format in the search URL."
 - For duplicates: "Closing as duplicate of #XXX"
 - For spam: "Closing as spam" or "Closing as not a valid issue"
 

@@ -6,11 +6,23 @@ Python Script for 'searching' and 'downloading' hundreds of images from Google t
 Documentation
 =============
 
-* `Documentation Homepage <https://google-images-download.readthedocs.io/en/latest/index.html>`__
-* `Installation <https://google-images-download.readthedocs.io/en/latest/installation.html>`__
-* `Input arguments <https://google-images-download.readthedocs.io/en/latest/arguments.html>`__
-* `Examples and Code Samples <https://google-images-download.readthedocs.io/en/latest/examples.html#>`__
+* `Documentation Homepage <https://hardikvasa.github.io/google-images-download/>`__
+* `Installation <https://hardikvasa.github.io/google-images-download/installation/>`__
+* `Input arguments <https://hardikvasa.github.io/google-images-download/arguments/>`__
+* `Examples and Code Samples <https://hardikvasa.github.io/google-images-download/examples/>`__
 
+Requirements
+============
+
+**Chrome/Chromium browser is required** for this tool to work. Google Images now requires JavaScript execution, so Selenium with Chrome is mandatory for all downloads.
+
+Installation:
+
+* **Linux**: ``apt-get install chromium-browser`` or ``apt-get install google-chrome-stable``
+* **macOS**: ``brew install --cask google-chrome``
+* **Windows**: Download from https://www.google.com/chrome/
+
+The tool will automatically download and manage the chromedriver using ``webdriver-manager``.
 
 Disclaimer
 ==========
